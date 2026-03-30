@@ -9,7 +9,7 @@ import {
 
 
 // src/electron.d.ts
-export {};
+export { };
 
 declare global {
   interface Window {
@@ -41,19 +41,19 @@ declare global {
       stopPythonBackend: () => Promise<any>
 
       // ============ NEW: MALWARE ANALYSIS METHODS ============
-      
+
       // File analysis operations
       uploadFile: (filePath: string) => Promise<UploadResponse>
       startAnalysis: (filePath: string) => Promise<StartAnalysisResponse>
       getAnalysisStatus: (analysisId: string) => Promise<AnalysisStatusResponse>
       getAnalysisResults: (analysisId: string) => Promise<AnalysisResultsResponse>
-      
+
       // VM operations
       getVmStatus: () => Promise<VmStatusResponse>
-      
+
       // Backend operations
       checkBackendHealth: () => Promise<BackendHealthResponse>
-      
+
       // Event listeners (your existing ones)
       onNewScan: (callback: () => void) => () => void
       onOpenFileDialog: (callback: () => void) => () => void
@@ -69,7 +69,21 @@ declare global {
       getAnalysisResults?: (analysisId: string) => Promise<AnalysisResultsResponse>;
       getVmStatus?: () => Promise<VmStatusResponse>;
       checkBackendHealth?: () => Promise<BackendHealthResponse>;
-    }
+    },
+    chatAPI: {
+      initializeChat: (
+        sessionId: string,
+        systemPrompt: string,
+        results: any
+      ) => Promise<{ success: boolean; message: string }>;
+
+      sendMessage: (
+        sessionId: string,
+        message: string,
+        history: any,
+        context: any
+      ) => Promise<{ success: boolean; message: string }>;
+    };
   }
 }
 

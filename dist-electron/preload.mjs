@@ -30,3 +30,7 @@ electron.contextBridge.exposeInMainWorld("backend", {
   getVmStatus: () => electron.ipcRenderer.invoke("vm:status"),
   checkBackendHealth: () => electron.ipcRenderer.invoke("backend:health")
 });
+electron.contextBridge.exposeInMainWorld("chatAPI", {
+  initializeChat: (sessionId, systemPrompt, results) => electron.ipcRenderer.invoke("chat:initialize", { sessionId, systemPrompt, results }),
+  sendMessage: (sessionId, message, history, context) => electron.ipcRenderer.invoke("chat:message", { sessionId, message, history, context })
+});

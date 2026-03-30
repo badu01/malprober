@@ -290,7 +290,7 @@ class VirtualBoxManager:
         logger.info(f"Command: {command}")
         
         # Don't wait for completion if it's malware (might not exit)
-        timeout = 60  #if wait else 10
+        timeout = 120  #if wait else 10
         result = self._run_command(command, timeout=timeout, check=False)
         
         if result.returncode != 0:

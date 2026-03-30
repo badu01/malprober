@@ -7,6 +7,7 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 import './ipc/apiHandlers'
+import './ipc/chatHandlers'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))

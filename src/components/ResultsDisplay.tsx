@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import {
-  FiShield,
   FiAlertTriangle,
   FiCheckCircle,
   FiInfo,
@@ -16,12 +15,8 @@ import {
   FiHardDrive,
   FiActivity,
   FiList,
-  FiGrid,
-  FiCalendar,
-  FiHash,
   FiFolder,
   FiCpu,
-  FiZap,
   FiClock,
   FiDatabase
 } from 'react-icons/fi'

@@ -35,3 +35,10 @@ contextBridge.exposeInMainWorld('backend', {
   getVmStatus: () => ipcRenderer.invoke('vm:status'),
   checkBackendHealth: () => ipcRenderer.invoke('backend:health')
 })
+contextBridge.exposeInMainWorld('chatAPI', {
+  initializeChat: (sessionId: string, systemPrompt: string, results: any) =>
+    ipcRenderer.invoke('chat:initialize', { sessionId, systemPrompt, results }),
+
+  sendMessage: (sessionId: string, message: string, history: any, context: any) =>
+    ipcRenderer.invoke('chat:message', { sessionId, message, history, context })
+});

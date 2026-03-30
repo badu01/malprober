@@ -10,7 +10,7 @@ import AnalysisProgress from '../components/AnalysisProgress'
 import ResultsDisplay from '../components/ResultsDisplay'
 import axios from 'axios'
 import { analysisService } from '../renderer/services/analysisService' // Import the service
-import { log } from 'node:console'
+import ChatBot from '../components/ChatBot'
 
 const FileScan: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -334,7 +334,7 @@ const FileScan: React.FC = () => {
           {/* Right Column - Recent Scans & Stats */}
           <div className="space-y-6">
             {/* Quick Stats */}
-            <div className="card">
+            {/* <div className="card">
               <h3 className="text-lg font-semibold mb-4">Analysis Statistics</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -350,10 +350,28 @@ const FileScan: React.FC = () => {
                   <span className="font-medium text-[#a5f54a]">94.2%</span>
                 </div>
               </div>
-            </div>
+            </div> */}
+
+
+
+
+
+
+
+              <ChatBot analysisResults={analysisResults} isAnalyzing={isAnalyzing}/>
+
+
+
+
+
+
+
+
+
+
 
             {/* Tips */}
-            <div className="card">
+            {/* <div className="card">
               <h3 className="text-lg font-semibold mb-4">Analysis Tips</h3>
               <ul className="space-y-3">
                 <li className="flex items-start space-x-2">
@@ -369,7 +387,7 @@ const FileScan: React.FC = () => {
                   <span className="text-sm">Results include process, network, and file operations</span>
                 </li>
               </ul>
-            </div>
+            </div> */}
           </div>
         </div>
 

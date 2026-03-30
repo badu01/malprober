@@ -7,7 +7,6 @@ import {
   FiGlobe, 
   FiSettings,
   FiUser,
-  FiShield,
   FiMenu,
   FiGrid,
   FiX,
@@ -57,7 +56,7 @@ const Layout: React.FC = () => {
         <div className="p-6 border-b border-black-secondary">
           <div className="flex items-center space-x-1">
               <img 
-                src="/malprober_logo_svg.svg" 
+                src="/logo_m.svg" 
                 alt="MalProber Logo" 
                 className="w-9 h-9"
               />
@@ -118,7 +117,7 @@ const Layout: React.FC = () => {
             )}
             <button
               onClick={handleLogout}
-              className="p-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] rounded-lg"
+              className="p-2 text-gray-400 hover:text-white hover:bg-black-primary rounded-lg"
               title="Logout"
             >
               <FiLogOut className="w-5 h-5" />
