@@ -8,23 +8,19 @@ import {
   FiLock,
   FiUnlock,
   FiExternalLink,
-  FiClock,
-  FiSearch
+  FiSearch,
+  FiLoader
 } from 'react-icons/fi'
 import { toast } from 'react-toastify'
-import AnalysisProgress from '../components/AnalysisProgress'
-import ResultsDisplay from '../components/ResultsDisplay'
+import UrlScanResults from '../components/UrlScanResults'
+import { useAuth } from '../contexts/AuthContext'
+import { scanHistoryService, type CreateScanRecord } from '../renderer/firebase/scanHistoryService'
 
 const UrlScan: React.FC = () => {
+  const { user } = useAuth()
   const [url, setUrl] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResults, setAnalysisResults] = useState<any>(null)
-  const [progress, setProgress] = useState(0)
-  const [recentScans, setRecentScans] = useState([
-    { url: 'https://google.com', safe: true, time: '2 hours ago' },
-    { url: 'https://suspicious-site.net', safe: false, time: '1 day ago' },
-    { url: 'https://github.com', safe: true, time: '3 days ago' },
-  ])
 
   const validateUrl = (input: string) => {
     try {
@@ -47,72 +43,67 @@ const UrlScan: React.FC = () => {
     }
 
     setIsAnalyzing(true)
-    setProgress(10)
-
-    const result = await window.backend.scanUrl(url.trim());
-    console.log(result);
-    
-
-    setProgress(20)
+    setAnalysisResults(null)
 
     try {
-      // Simulate progress
-      // const progressInterval = setInterval(() => {
-      //   setProgress(prev => {
-      //     if (prev >= 90) {
-      //       clearInterval(progressInterval)
-      //       return 90
-      //     }
-      //     return prev + 15
-      //   })
-      // }, 400)
+      const result = await window.backend.scanUrl(url.trim())
+      console.log('URL Scan Result:', result)
+      setAnalysisResults(result)
 
-      // Send to backend API
-      // const response = await axios.post('https://urlscan.io/api/v1/scan', {
-      //   url: url.trim(),
-      //   visibility: 'private',
-      // },
-      //   {
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //       'API-Key': process.env.URLSCAN_API_KEY || ''
-      //     }
-      //   })
+      // Extract verdict from result
+      const verdictData = result?.verdicts?.overall || result?.verdicts?.engines || {}
+      const isMalicious = verdictData?.malicious || false
+      const confidence = verdictData?.score || 0
+      const verdict: 'malicious' | 'suspicious' | 'safe' = isMalicious ? 'malicious' : confidence > 30 ? 'suspicious' : 'safe'
 
-      // console.log('URLScan Response:', response.data)
+      // Extract URL-specific info
+      const page = result?.page || {}
+      const stats = result?.stats || {}
+      const lists = result?.lists || {}
+      const task = result?.task || {}
 
-      // clearInterval(progressInterval)
-      // setProgress(100)
+      // Save to Firebase with generalized structure
+      if (user && result) {
+        const explanations = result?.verdicts?.engines?.maliciousVerdicts || []
+        const tags = result?.verdicts?.engines?.tags || []
 
-      // Simulate results (in real app, use actual response)
-      const mockResults = {
-        confidence: Math.random() > 0.5 ? 85 : 35,
-        verdict: Math.random() > 0.7 ? 'malicious' : Math.random() > 0.4 ? 'suspicious' : 'safe',
-        explanations: [
-          'Domain registered 1 year ago',
-          'Valid SSL certificate detected',
-          'No known phishing patterns identified',
-          'Low reputation score from web crawlers'
-        ],
-        details: {
-          engines: 72,
-          detections: Math.floor(Math.random() * 10),
-          urlInfo: {
-            domain: new URL(url).hostname,
-            protocol: new URL(url).protocol,
-            path: new URL(url).pathname
-          }
+        const scanRecord: CreateScanRecord = {
+          type: 'url' as const,
+          target: url,
+          confidence: confidence,
+          verdict: verdict,
+          scanData: {
+            engines: result?.verdicts?.engines?.enginesTotal || 72,
+            detections: stats?.malicious || 0,
+            anomalies: [...explanations, ...tags],
+            explanations: explanations,
+            statistics: {
+              total_requests: stats?.totalLinks || 0,
+              secure_percentage: stats?.securePercentage || 0,
+              ipv6_percentage: stats?.IPv6Percentage || 0,
+              total_size: stats?.encodedSize || 0,
+              domains: lists?.domains?.length || 0,
+              ips: lists?.ips?.length || 0,
+              countries: lists?.countries?.length || 0
+            },
+            urlInfo: {
+              domain: page?.domain || task?.domain || new URL(url).hostname,
+              protocol: new URL(url).protocol,
+              path: new URL(url).pathname,
+              ip: page?.ip,
+              country: page?.country,
+              server: page?.server,
+              statusCode: page?.status
+            }
+          },
+          analysisFlow: 'static_only',
+          rawResults: JSON.parse(JSON.stringify(result)),
+          reportUrl: task?.reportURL || null
         }
+
+        await scanHistoryService.saveScan(scanRecord)
+        toast.success('Results saved to history')
       }
-
-      setAnalysisResults(mockResults)
-
-      // Add to recent scans
-      setRecentScans(prev => [{
-        url: url,
-        safe: mockResults.verdict === 'safe',
-        time: 'Just now'
-      }, ...prev.slice(0, 2)])
 
       toast.success('URL analysis complete!')
 
@@ -120,12 +111,13 @@ const UrlScan: React.FC = () => {
       if (window.electronAPI) {
         window.electronAPI.showNotification(
           'URL Analysis Complete',
-          `Analysis of ${url} completed. Verdict: ${mockResults.verdict}`
+          `Analysis of ${url} completed. Verdict: ${verdict.toUpperCase()}`
         )
       }
 
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Analysis failed')
+      console.error('URL scan failed:', error)
+      toast.error(error.message || 'Analysis failed')
     } finally {
       setIsAnalyzing(false)
     }
@@ -193,6 +185,7 @@ const UrlScan: React.FC = () => {
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="https://example.com"
                     className="w-full pl-12 pr-4 py-4 bg-black-primary border border-black-secondary rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#a5f54a] focus:ring-2 focus:ring-[#a5f54a]/20"
+                    disabled={isAnalyzing}
                   />
                   <div className="absolute right-4 top-1/2 -translate-y-1/2">
                     {url && validateUrl(url) ? (
@@ -231,8 +224,8 @@ const UrlScan: React.FC = () => {
                   >
                     {isAnalyzing ? (
                       <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Analyzing... {progress}%</span>
+                        <FiLoader className="w-5 h-5 animate-spin" />
+                        <span>Analyzing URL...</span>
                       </>
                     ) : (
                       <>
@@ -244,127 +237,64 @@ const UrlScan: React.FC = () => {
 
                   <button
                     onClick={openUrl}
-                    disabled={!validateUrl(url)}
+                    disabled={!validateUrl(url) || isAnalyzing}
                     className={`py-4 px-6 rounded-xl font-medium transition-all flex items-center justify-center space-x-3
-                      ${!validateUrl(url)
-                        ? 'bg-black-primary/50 text-gray-300s cursor-not-allowed'
-                        : 'bg-black/60 text-[#a5f54a] hover:bg-black/80 cursor-pointer'
+                      ${!validateUrl(url) || isAnalyzing
+                        ? 'bg-black-primary/50 text-gray-300 cursor-not-allowed'
+                        : 'bg-black/60 text-[#a5f54a] hover:bg-black-primary border border-green-main cursor-pointer'
                       }`}
                   >
                     <FiExternalLink className="w-5 h-5" />
                     <span>Open in Browser</span>
                   </button>
                 </div>
-
               </div>
             </div>
-
-            {/* Analysis Progress */}
-            {
-              isAnalyzing && (
-                <div className="card mt-6">
-                  <AnalysisProgress
-                    currentStep={Math.floor(progress / 25)}
-                    steps={['URL Validation', 'Domain Reputation', 'Threat Database', 'Final Report']}
-                    progress={progress}
-                    status="Analyzing URL security..."
-                  />
-                </div>
-              )}
           </div>
 
-          {/* Right Column - Recent Scans & Stats */}
+          {/* Right Column - Info */}
           <div className="space-y-6">
-            {/* Recent Scans */}
+            {/* Safety Tips */}
             <div className="card">
-              <h3 className="text-lg font-semibold mb-4">Recent URL Scans</h3>
-              <div className="space-y-3">
-                {recentScans.map((scan, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-black-primary rounded-lg hover:bg-black-primary/50 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      {scan.safe ? (
-                        <div className="p-2 bg-green-500/20 rounded-lg">
-                          <FiShield className="w-4 h-4 text-green-400" />
-                        </div>
-                      ) : (
-                        <div className="p-2 bg-red-500/20 rounded-lg">
-                          <FiAlertTriangle className="w-4 h-4 text-red-400" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{scan.url}</p>
-                        <div className="flex items-center space-x-2 text-xs text-gray-400">
-                          <FiClock className="w-3 h-3" />
-                          <span>{scan.time}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-xs px-2 py-1 rounded-full bg-gray-700">
-                      {scan.safe ? 'Safe' : 'Risky'}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <h3 className="text-lg font-semibold mb-4">Safety Tips</h3>
+              <ul className="space-y-3 text-sm text-gray-400">
+                <li className="flex items-start gap-2">
+                  <FiShield className="w-4 h-4 text-[#a5f54a] mt-0.5 shrink-0" />
+                  <span>Check URL before clicking suspicious links</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <FiLock className="w-4 h-4 text-[#a5f54a] mt-0.5 shrink-0" />
+                  <span>Look for HTTPS in sensitive websites</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <FiAlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
+                  <span>Avoid entering credentials on flagged sites</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <FiGlobe className="w-4 h-4 text-[#a5f54a] mt-0.5 shrink-0" />
+                  <span>Verify domain names for typosquatting</span>
+                </li>
+              </ul>
             </div>
 
-            {/* Safety Indicators */}
+            {/* Info Card */}
             <div className="card">
-              <h3 className="text-lg font-semibold mb-4">Safety Indicators</h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400">SSL Certificate</span>
-                    <span className="text-green-400 font-medium">Secure</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div className="w-4/5 bg-green-500 h-2 rounded-full"></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400">Domain Age</span>
-                    <span className="text-yellow-400 font-medium">1+ Year</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div className="w-3/4 bg-yellow-500 h-2 rounded-full"></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400">Phishing Risk</span>
-                    <span className="text-red-400 font-medium">Low</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div className="w-1/4 bg-red-500 h-2 rounded-full"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">URLs Analyzed</p>
-                  <p className="text-2xl font-bold mt-1">1,048</p>
-                </div>
-                <div className="p-3 bg-blue-500/20 rounded-lg">
-                  <FiGlobe className="w-6 h-6 text-blue-400" />
-                </div>
+              <h3 className="text-lg font-semibold mb-4">How It Works</h3>
+              <div className="space-y-2 text-sm text-gray-400">
+                <p>• Checks against threat intelligence databases</p>
+                <p>• Analyzes domain reputation and age</p>
+                <p>• Scans for known malicious patterns</p>
+                <p>• Verifies SSL certificate validity</p>
+                <p>• Checks for phishing indicators</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Results Display */}
-        {analysisResults && (
+        {analysisResults && !isAnalyzing && (
           <div className="mt-8">
-            <ResultsDisplay results={analysisResults} />
+            <UrlScanResults results={analysisResults} />
           </div>
         )}
       </div>

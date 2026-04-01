@@ -8,314 +8,325 @@ import {
   FiCheckCircle,
   FiBarChart2,
   FiTrendingUp,
-  FiClock
+  FiClock,
+  FiLoader
 } from 'react-icons/fi'
-
 import { Link } from 'react-router-dom'
-import { useScan } from '../contexts/ScanContext'
+import { scanHistoryService } from '../renderer/firebase/scanHistoryService'
+import { useAuth } from '../contexts/AuthContext'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
-import { Doughnut, Bar } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 const Dashboard: React.FC = () => {
-  const { scans } = useScan()
+  const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalScans: 0,
     maliciousCount: 0,
     suspiciousCount: 0,
     safeCount: 0,
-    avgConfidence: 0
+    avgConfidence: 0,
+    fileScans: 0,
+    urlScans: 0
   })
+  const [recentScans, setRecentScans] = useState<any[]>([])
 
   useEffect(() => {
-    const total = scans.length
-    const malicious = scans.filter(s => s.verdict === 'malicious').length
-    const suspicious = scans.filter(s => s.verdict === 'suspicious').length
-    const safe = scans.filter(s => s.verdict === 'safe').length
-    const avgConfidence = scans.length > 0
-      ? scans.reduce((acc, s) => acc + s.confidence, 0) / scans.length
-      : 0
+    if (user) {
+      loadDashboardData()
+    }
+  }, [user])
 
-    setStats({
-      totalScans: total,
-      maliciousCount: malicious,
-      suspiciousCount: suspicious,
-      safeCount: safe,
-      avgConfidence: parseFloat(avgConfidence.toFixed(1))
-    })
-  }, [scans])
-
-  const doughnutData = {
-    labels: ['Safe', 'Suspicious', 'Malicious'],
-    datasets: [
-      {
-        // data: [stats.safeCount, stats.suspiciousCount, stats.maliciousCount],
-        data: [100, 20, 30],
-        backgroundColor: [
-          'rgb(34, 197, 94)',
-          'rgb(234, 179, 8)',
-          'rgb(239, 68, 68)'
-        ],
-        borderColor: [
-          'rgb(22, 163, 74)',
-          'rgb(202, 138, 4)',
-          'rgb(220, 38, 38)'
-        ],
-        borderWidth: 2,
-      },
-    ],
+  const loadDashboardData = async () => {
+    setLoading(true)
+    try {
+      // Get user stats from service
+      const userStats = await scanHistoryService.getUserStats()
+      
+      // Get recent scans
+      const scans = await scanHistoryService.getUserScans(10)
+      setRecentScans(scans)
+      
+      // Calculate additional stats
+      const fileScans = scans.filter(s => s.type === 'file').length
+      const urlScans = scans.filter(s => s.type === 'url').length
+      
+      setStats({
+        totalScans: userStats.totalScans,
+        maliciousCount: userStats.maliciousCount,
+        suspiciousCount: userStats.suspiciousCount,
+        safeCount: userStats.safeCount,
+        avgConfidence: userStats.avgConfidence,
+        fileScans: fileScans,
+        urlScans: urlScans
+      })
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
   }
-
 
   const barData = {
     labels: ["Safe", "Suspicious", "Malicious"],
     datasets: [
       {
-        label: "Analysis Results",
-        data: [100, 20, 30], // or use stats.safeCount etc.
+        label: "Scans",
+        data: [stats.safeCount, stats.suspiciousCount, stats.maliciousCount],
         backgroundColor: [
-          "rgba(34,197,94,0.7)",   // green
-          "rgba(234,179,8,0.7)",   // yellow
-          "rgba(239,68,68,0.7)",   // red
+          "rgba(165, 245, 74, 0.7)",   // green-main
+          "rgba(245, 158, 11, 0.7)",   // orange
+          "rgba(239, 68, 68, 0.7)",    // red
         ],
         borderColor: [
-          "rgb(22,163,74)",
-          "rgb(202,138,4)",
-          "rgb(220,38,38)",
+          "rgb(165, 245, 74)",
+          "rgb(245, 158, 11)",
+          "rgb(239, 68, 68)",
         ],
-        borderWidth: 2,
-        borderRadius: 8, // Rounded corners
-        barThickness: 45,
+        borderWidth: 1,
+        borderRadius: 6,
+        barPercentage: 0.65,
+        categoryPercentage: 0.8,
       },
     ],
   };
 
+  const barOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        backgroundColor: "#1a1a1a",
+        titleColor: "#e5e5e5",
+        bodyColor: "#a3a3a3",
+        borderColor: "#2a2a2a",
+        borderWidth: 1,
+        padding: 8,
+        callbacks: {
+          label: function(context: any) {
+            return ` ${context.raw} scans`;
+          }
+        }
+      },
+    },
+    scales: {
+      x: {
+        ticks: { 
+          color: "#a3a3a3", 
+          font: { size: 11, weight: 500 },
+        },
+        grid: { display: false },
+      },
+      y: {
+        ticks: { 
+          color: "#a3a3a3", 
+          font: { size: 11 },
+          stepSize: 1,
+        },
+        grid: { color: "rgba(255,255,255,0.05)" },
+        beginAtZero: true,
+      },
+    },
+  };
 
-  const recentActivity = scans.slice(0, 5)
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <FiLoader className="w-10 h-10 text-[#a5f54a] animate-spin mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="glass-effect rounded-2xl">
+      <div className="border-b border-[#2a2a2a] pb-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold bg-green-main bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold bg-clip-text text-green-main">
               Dashboard
             </h1>
-            <p className="text-gray-400 mt-2">
-              Real-time overview of your malware analysis activities
+            <p className="text-gray-500 text-sm mt-1">
+              Overview of your malware analysis activities
             </p>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             <div className="text-right">
-              <p className="text-sm text-gray-400">Last Analysis</p>
-              <p className="font-medium">
-                {scans.length > 0
-                  ? new Date(scans[0].timestamp).toLocaleTimeString()
+              <p className="text-xs text-gray-500">Last Scan</p>
+              <p className="text-sm font-medium text-gray-300">
+                {recentScans.length > 0
+                  ? new Date(recentScans[0].timestamp).toLocaleDateString()
                   : 'No scans yet'
                 }
               </p>
             </div>
-            <div className="p-3 bg-linear-to-r from-green-500 to-blue-500 rounded-xl">
-              <FiShield className="w-8 h-8 text-white" />
+            <div className="p-2 bg-[#1a1a1a] rounded-xl border border-[#2a2a2a]">
+              <FiShield className="w-6 h-6 text-[#a5f54a]" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="card">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">Total Scans</p>
-              <p className="text-3xl font-bold mt-2">{stats.totalScans}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Total Scans</p>
+              <p className="text-2xl font-semibold text-white mt-1">{stats.totalScans}</p>
             </div>
-            <div className="p-3 bg-blue-500/20 rounded-lg">
-              <FiBarChart2 className="w-8 h-8 text-blue-400" />
+            <div className="p-2 bg-[#1a1a1a] rounded-lg">
+              <FiBarChart2 className="w-5 h-5 text-[#a5f54a]" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="flex items-center text-green-400">
-              <FiTrendingUp className="w-4 h-4 mr-1" />
-              <span className="text-sm">+12% from last week</span>
+          <div className="mt-3">
+            <div className="flex items-center text-[#a5f54a] text-xs">
+              <FiTrendingUp className="w-3 h-3 mr-1" />
+              <span>{stats.fileScans} files, {stats.urlScans} URLs</span>
             </div>
           </div>
         </div>
 
-        <div className="card">
+        <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">Malicious</p>
-              <p className="text-3xl font-bold mt-2 text-red-400">{stats.maliciousCount}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Malicious</p>
+              <p className="text-2xl font-semibold text-red-400 mt-1">{stats.maliciousCount}</p>
             </div>
-            <div className="p-3 bg-red-500/20 rounded-lg">
-              <FiAlertTriangle className="w-8 h-8 text-red-400" />
+            <div className="p-2 bg-red-500/10 rounded-lg">
+              <FiAlertTriangle className="w-5 h-5 text-red-400" />
             </div>
           </div>
-          <div className="mt-4">
-            <p className="text-sm text-gray-400">
+          <div className="mt-3">
+            <p className="text-xs text-gray-500">
               {stats.totalScans > 0
-                ? `${((stats.maliciousCount / stats.totalScans) * 100).toFixed(1)}% of total`
+                ? `${((stats.maliciousCount / stats.totalScans) * 100).toFixed(1)}% of total scans`
                 : 'No data'
               }
             </p>
           </div>
         </div>
 
-        <div className="card">
+        <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">Average Confidence</p>
-              <p className="text-3xl font-bold mt-2 text-green-400">{stats.avgConfidence}%</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Suspicious</p>
+              <p className="text-2xl font-semibold text-orange-400 mt-1">{stats.suspiciousCount}</p>
             </div>
-            <div className="p-3 bg-green-500/20 rounded-lg">
-              <FiCheckCircle className="w-8 h-8 text-green-400" />
+            <div className="p-2 bg-orange-500/10 rounded-lg">
+              <FiAlertTriangle className="w-5 h-5 text-orange-400" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="w-full bg-gray-700 rounded-full h-2">
+          <div className="mt-3">
+            <p className="text-xs text-gray-500">
+              Requires manual review
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Avg Confidence</p>
+              <p className="text-2xl font-semibold text-[#a5f54a] mt-1">{stats.avgConfidence.toPrecision(3)}%</p>
+            </div>
+            <div className="p-2 bg-[#1a1a1a] rounded-lg">
+              <FiCheckCircle className="w-5 h-5 text-[#a5f54a]" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5">
               <div
-                className="bg-linear-to-r from-green-500 to-blue-500 h-2 rounded-full"
+                className="bg-[#a5f54a] h-1.5 rounded-full transition-all"
                 style={{ width: `${stats.avgConfidence}%` }}
               ></div>
             </div>
           </div>
         </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400">Recent Activity</p>
-              <p className="text-3xl font-bold mt-2">{recentActivity.length}</p>
-            </div>
-            <div className="p-3 bg-purple-500/20 rounded-lg">
-              <FiClock className="w-8 h-8 text-purple-400" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="text-sm text-gray-400">Last 5 scans</p>
-          </div>
-        </div>
       </div>
 
       {/* Charts & Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Distribution Chart */}
-        <div className="card lg:col-span-2">
-          <h3 className="text-lg font-semibold mb-4">Threat Distribution</h3>
+        <div className="lg:col-span-2 bg-[#141414] rounded-xl border border-[#2a2a2a] p-5">
+          <h3 className="text-sm font-medium text-gray-300 mb-4">Threat Distribution</h3>
           <div className="h-64">
-            {/* <Doughnut 
-              data={doughnutData} 
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'right',
-                    labels: {
-                      color: '#9ca3af',
-                      font: {
-                        size: 12
-                      }
-                    }
-                  }
-                }
-              }}
-            /> */}
-
-            <Bar
-              data={barData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: "top",
-                    labels: {
-                      color: "#e5e7eb",
-                      font: { size: 13, weight: 500 },
-                    },
-                  },
-                  tooltip: {
-                    backgroundColor: "#1f2937",
-                    titleColor: "#fff",
-                    bodyColor: "#d1d5db",
-                    borderColor: "#374151",
-                    borderWidth: 1,
-                    padding: 10,
-                    displayColors: false,
-                  },
-                },
-                scales: {
-                  x: {
-                    ticks: { color: "#9ca3af", font: { size: 12 } },
-                    grid: { display: false },
-                  },
-                  y: {
-                    ticks: { color: "#9ca3af", font: { size: 12 } },
-                    grid: { color: "rgba(255,255,255,0.05)" },
-                  },
-                },
-              }}
-            />
-
-
-
+            <Bar data={barData} options={barOptions} />
+          </div>
+          <div className="flex justify-center gap-6 mt-4 pt-3 border-t border-[#2a2a2a]">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-[#a5f54a]"></div>
+              <span className="text-xs text-gray-500">Safe ({stats.safeCount})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-orange-400"></div>
+              <span className="text-xs text-gray-500">Suspicious ({stats.suspiciousCount})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-red-400"></div>
+              <span className="text-xs text-gray-500">Malicious ({stats.maliciousCount})</span>
+            </div>
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="card">
-          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+        <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-5">
+          <h3 className="text-sm font-medium text-gray-300 mb-4">Quick Actions</h3>
           <div className="flex flex-col space-y-2">
             <Link to="/file-scan">
-              <button className="w-full flex items-center justify-between p-4 rounded-lg bg-black-primary hover:bg-black-primary/80 transition-colors group">
+              <button className="w-full flex items-center justify-between p-3 rounded-lg bg-[#1a1a1a] hover:bg-[#1f1f1f] transition-all group border border-[#2a2a2a] hover:border-[#a5f54a]/30">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30">
-                    <FiFile className="w-5 h-5 text-blue-400" />
+                  <div className="p-1.5 bg-[#141414] rounded-lg group-hover:bg-[#a5f54a]/10">
+                    <FiFile className="w-4 h-4 text-[#a5f54a]" />
                   </div>
                   <div className="text-left">
-                    <p className="font-medium">File Scan</p>
-                    <p className="text-sm text-gray-400">Upload and analyze files</p>
+                    <p className="text-sm font-medium text-white">File Scan</p>
+                    <p className="text-xs text-gray-500">Upload and analyze files</p>
                   </div>
                 </div>
-                <div className="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="text-gray-600 group-hover:text-[#a5f54a] transition-colors">
                   →
                 </div>
               </button>
             </Link>
 
             <Link to="/url-scan">
-              <button className="w-full flex items-center justify-between p-4 rounded-lg bg-black-primary hover:bg-black-primary/80 transition-colors group">
+              <button className="w-full flex items-center justify-between p-3 rounded-lg bg-[#1a1a1a] hover:bg-[#1f1f1f] transition-all group border border-[#2a2a2a] hover:border-[#a5f54a]/30">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-green-500/20 rounded-lg group-hover:bg-green-500/30">
-                    <FiGlobe className="w-5 h-5 text-green-400" />
+                  <div className="p-1.5 bg-[#141414] rounded-lg group-hover:bg-[#a5f54a]/10">
+                    <FiGlobe className="w-4 h-4 text-[#a5f54a]" />
                   </div>
                   <div className="text-left">
-                    <p className="font-medium">URL Scan</p>
-                    <p className="text-sm text-gray-400">Check website safety</p>
+                    <p className="text-sm font-medium text-white">URL Scan</p>
+                    <p className="text-xs text-gray-500">Check website safety</p>
                   </div>
                 </div>
-                <div className="text-green-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="text-gray-600 group-hover:text-[#a5f54a] transition-colors">
                   →
                 </div>
               </button>
             </Link>
 
             <Link to="/history">
-              <button className="w-full flex items-center justify-between p-4 rounded-lg bg-black-primary hover:bg-black-primary/80 transition-colors group">
+              <button className="w-full flex items-center justify-between p-3 rounded-lg bg-[#1a1a1a] hover:bg-[#1f1f1f] transition-all group border border-[#2a2a2a] hover:border-[#a5f54a]/30">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-purple-500/20 rounded-lg group-hover:bg-purple-500/30">
-                    <FiClock className="w-5 h-5 text-purple-400" />
+                  <div className="p-1.5 bg-[#141414] rounded-lg group-hover:bg-[#a5f54a]/10">
+                    <FiClock className="w-4 h-4 text-[#a5f54a]" />
                   </div>
                   <div className="text-left">
-                    <p className="font-medium">View History</p>
-                    <p className="text-sm text-gray-400">Past scan results</p>
+                    <p className="text-sm font-medium text-white">View History</p>
+                    <p className="text-xs text-gray-500">Past scan results</p>
                   </div>
                 </div>
-                <div className="text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="text-gray-600 group-hover:text-[#a5f54a] transition-colors">
                   →
                 </div>
               </button>
@@ -325,89 +336,92 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Recent Activity */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold">Recent Activity</h3>
-          <Link to="/history" className="text-sm text-blue-400 hover:text-blue-300">
-            View All →
-          </Link>
+      <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-gray-300">Recent Activity</h3>
+          {recentScans.length > 0 && (
+            <Link to="/history" className="text-xs text-[#a5f54a] hover:text-[#8CBF3B] transition-colors">
+              View all →
+            </Link>
+          )}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Target</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Type</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Verdict</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Confidence</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentActivity.length > 0 ? (
-                recentActivity.map((scan) => (
-                  <tr key={scan.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                    <td className="py-3 px-4">
-                      <div className="font-medium truncate max-w-xs">
+        
+        {recentScans.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#2a2a2a]">
+                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Target</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Type</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Verdict</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Confidence</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentScans.map((scan) => (
+                  <tr key={scan.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a] transition-colors">
+                    <td className="py-2 px-3">
+                      <div className="text-sm text-gray-300 truncate max-w-[180px]">
                         {scan.filename || scan.target}
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium
+                    <td className="py-2 px-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full
                         ${scan.type === 'file'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : 'bg-green-500/20 text-green-400'
+                          ? 'bg-blue-500/10 text-blue-400'
+                          : 'bg-green-500/10 text-green-400'
                         }`}
                       >
                         {scan.type.toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium
+                    <td className="py-2 px-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full
                         ${scan.verdict === 'safe'
-                          ? 'bg-green-500/20 text-green-400'
+                          ? 'bg-[#a5f54a]/10 text-[#a5f54a]'
                           : scan.verdict === 'suspicious'
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : 'bg-red-500/20 text-red-400'
+                            ? 'bg-orange-500/10 text-orange-400'
+                            : 'bg-red-500/10 text-red-400'
                         }`}
                       >
                         {scan.verdict.toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center">
-                        <div className="w-16 bg-gray-700 rounded-full h-2 mr-3">
+                    <td className="py-2 px-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-12 bg-[#1a1a1a] rounded-full h-1">
                           <div
-                            className={`h-2 rounded-full ${scan.confidence > 70
-                                ? 'bg-green-500'
-                                : scan.confidence > 30
-                                  ? 'bg-yellow-500'
-                                  : 'bg-red-500'
-                              }`}
+                            className={`h-1 rounded-full ${
+                              scan.confidence > 70 ? 'bg-[#a5f54a]' :
+                              scan.confidence > 30 ? 'bg-orange-400' : 'bg-red-400'
+                            }`}
                             style={{ width: `${scan.confidence}%` }}
                           ></div>
                         </div>
-                        <span>{scan.confidence}%</span>
+                        <span className="text-xs text-gray-400">{scan.confidence}%</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-gray-400 text-sm">
-                      {new Date(scan.timestamp).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                    <td className="py-2 px-3 text-xs text-gray-500">
+                      {new Date(scan.timestamp).toLocaleDateString()}
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-500">
-                    No scan history yet. Start by analyzing a file or URL.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-10">
+            <FiClock className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">No scan history yet</p>
+            <p className="text-xs text-gray-600 mt-1">Start by analyzing a file or URL</p>
+            <Link to="/file-scan">
+              <button className="mt-4 px-4 py-1.5 bg-[#a5f54a] text-black rounded-lg text-sm font-medium hover:bg-[#8CBF3B] transition-colors">
+                Start Scan
+              </button>
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   )

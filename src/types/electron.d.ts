@@ -1,3 +1,4 @@
+// src/types/electron.d.ts
 import {
   UploadResponse,
   StartAnalysisResponse,
@@ -8,7 +9,6 @@ import {
 } from './analysis.types';
 
 
-// src/electron.d.ts
 export { };
 
 declare global {

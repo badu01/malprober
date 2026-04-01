@@ -1,121 +1,161 @@
-// src/renderer/contexts/AuthContext.tsx
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react'
+// src/renderer/contexts/AuthContext.tsx (UPDATED)
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import { User as FirebaseUser } from 'firebase/auth';
+import { firebaseAuth, UserData } from '../renderer/firebase/authService';
+import { scanHistoryService } from '../renderer/firebase/scanHistoryService';
 
 interface User {
-  id: string
-  username: string
-  email: string
-  role: 'admin' | 'researcher'
-  createdAt: string
+  id: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'researcher' | 'user';
+  photoURL?: string | null;
+  createdAt: Date;
+  scanCount: number;
 }
 
 interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
-  register: (username: string, email: string, password: string) => Promise<void>
-  loading: boolean
+  user: User | null;
+  firebaseUser: FirebaseUser | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
+  register: (username: string, email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  loading: boolean;
+  userStats: {
+    totalScans: number;
+    maliciousCount: number;
+    suspiciousCount: number;
+    safeCount: number;
+    avgConfidence: number;
+  } | null;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context
-}
+  return context;
+};
 
 interface AuthProviderProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [userStats, setUserStats] = useState<AuthContextType['userStats']>(null);
 
   useEffect(() => {
-    // Check for stored session on mount
-    const storedUser = localStorage.getItem('malware_analyzer_user')
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        console.error('Error parsing stored user:', error)
-        localStorage.removeItem('malware_analyzer_user')
+    // Listen to Firebase auth state
+    const unsubscribe = firebaseAuth.onAuthStateChange(async (fbUser) => {
+      setFirebaseUser(fbUser);
+
+      if (fbUser) {
+        // Get additional user data from Firestore
+        let userData = await firebaseAuth.getUserData(fbUser.uid);
+        if (!userData) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          userData = await firebaseAuth.getUserData(fbUser.uid);
+        }
+
+        if (userData) {
+          const mappedUser: User = {
+            id: fbUser.uid,
+            username: userData.displayName || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+            email: fbUser.email || '',
+            role: userData.role,
+            photoURL: fbUser.photoURL || userData.photoURL,
+            createdAt: userData.createdAt,
+            scanCount: userData.scanCount
+          };
+          setUser(mappedUser);
+
+          // Load user stats
+          const stats = await scanHistoryService.getUserStats();
+          setUserStats(stats);
+        }
+      } else {
+        setUser(null);
+        setUserStats(null);
       }
-    }
-    setLoading(false)
-  }, [])
+
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const login = async (email: string, password: string) => {
-    setLoading(true)
+    setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Mock user data - in real app, validate against backend
-      const mockUser: User = {
-        id: '1',
-        username: email.split('@')[0],
-        email,
-        role: 'researcher',
-        createdAt: new Date().toISOString()
-      }
-      
-      setUser(mockUser)
-      localStorage.setItem('malware_analyzer_user', JSON.stringify(mockUser))
-    } catch (error) {
-      console.error('Login failed:', error)
-      throw error
+      await firebaseAuth.signInWithEmail(email, password);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    try {
+      await firebaseAuth.signInWithGoogle();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const register = async (username: string, email: string, password: string) => {
-    setLoading(true)
+    setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const newUser: User = {
-        id: Date.now().toString(),
-        username,
-        email,
-        role: 'researcher',
-        createdAt: new Date().toISOString()
-      }
-      
-      setUser(newUser)
-      localStorage.setItem('malware_analyzer_user', JSON.stringify(newUser))
-    } catch (error) {
-      console.error('Registration failed:', error)
-      throw error
+      const fbUser = await firebaseAuth.signUpWithEmail(email, password, username);
+      // User document is created automatically in the auth service
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem('malware_analyzer_user')
-  }
+  const logout = async () => {
+    setLoading(true);
+    try {
+      await firebaseAuth.signOut();
+
+      // Clear immediately
+      setUser(null);
+      setFirebaseUser(null);
+      setUserStats(null);
+
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    await firebaseAuth.resetPassword(email);
+  };
 
   const value = {
     user,
-    isAuthenticated: !!user,
+    firebaseUser,
+    isAuthenticated: !!firebaseUser && !!user,
     login,
+    loginWithGoogle,
     logout,
     register,
-    loading
-  }
+    resetPassword,
+    loading,
+    userStats
+  };
 
   return (
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
-  )
-}
+  );
+};

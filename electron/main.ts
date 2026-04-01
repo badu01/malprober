@@ -1,3 +1,5 @@
+// electron/main.ts
+
 import { app, BrowserWindow } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -36,6 +38,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
+    
     // icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     icon: path.join(__dirname,'assets/malprober_logo.ico'),
     webPreferences: {
@@ -54,7 +57,7 @@ function createWindow() {
     // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
-  //win.setMenu(null)
+  // win.setMenu(null)
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common

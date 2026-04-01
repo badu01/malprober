@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 
 const Layout: React.FC = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -29,13 +29,13 @@ const Layout: React.FC = () => {
     { path: '/settings', label: 'Settings', icon: <FiSettings className="w-5 h-5" /> },
   ]
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     logout()
     navigate('/login')
   }
 
   return (
-    <div className="flex h-screen text-white bg-linear-to-br from-[#111111] to-[#1a1a1a] overflow-hidden font-funnel-display">
+    <div className="flex h-screen text-white bg-linear-to-br from-black-primary to-black-primary overflow-hidden font-funnel-display">
       {/* Mobile Menu Button */}
       <button
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -49,7 +49,7 @@ const Layout: React.FC = () => {
         ${sidebarOpen ? 'w-64' : 'w-20'} 
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         fixed lg:relative z-40 h-full transition-all duration-300
-        bg-[#111111]/80 backdrop-blur-xl border-r border-black-secondary
+        bg-black-primary/80 backdrop-blur-xl border-r border-black-secondary
         flex flex-col
       `}>
         {/* Logo */}
@@ -87,7 +87,7 @@ const Layout: React.FC = () => {
                       w-full flex items-center space-x-3 px-4 py-3 rounded-lg
                       transition-all duration-200
                       ${isActive 
-                        ? 'bg-linear-to-r from-[#1d1d1d] to-[#1a1a1a] text-[#a5f54a] border-l-4 border-[#a5f54a]' 
+                        ? 'bg-black-secondary text-[#a5f54a] border-l-4 border-[#a5f54a]' 
                         : 'text-gray-400 hover:text-white hover:bg-black-primary'
                       }
                     `}

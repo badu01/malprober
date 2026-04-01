@@ -1,4 +1,4 @@
-// src/renderer/contexts/ScanContext.tsx
+// src/contexts/ScanContext.tsx
 import React, { createContext, useState, useContext, ReactNode } from 'react'
 
 export interface ScanResult {

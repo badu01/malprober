@@ -156,7 +156,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
             ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}
             ${dragActive
               ? 'border-green-main bg-green-main/10 scale-[1.02]'
-              : 'border-black-secondary hover:border-black-primary hover:bg-black-primary'
+              : 'border-black-secondary hover:border-green-main/30 hover:bg-black-primary'
             }
           `}
         >

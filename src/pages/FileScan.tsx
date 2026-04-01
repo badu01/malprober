@@ -2,7 +2,6 @@
 import React, { useState } from 'react'
 import {
   FiShield,
-  FiCheck
 } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import FileUpload from '../components/FileUpload'
@@ -11,6 +10,9 @@ import ResultsDisplay from '../components/ResultsDisplay'
 import axios from 'axios'
 import { analysisService } from '../renderer/services/analysisService' // Import the service
 import ChatBot from '../components/ChatBot'
+import { scanHistoryService, type ScanRecord } from '../renderer/firebase/scanHistoryService';
+import { useAuth } from '../contexts/AuthContext';
+
 
 const FileScan: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -23,6 +25,9 @@ const FileScan: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0)
   const [statusMessage, setStatusMessage] = useState('')
 
+
+  const { user } = useAuth();
+
   // Handle file selection from FileUpload component
   const handleFileSelect = async (file: File, filePath?: string, fileInfoData?: any) => {
     setSelectedFile(file)
@@ -32,6 +37,34 @@ const FileScan: React.FC = () => {
     setAnalysisId(null)
     setProgress(0)
   }
+
+  type Verdict = 'safe' | 'suspicious' | 'malicious';
+
+              const mapVerdict = (verdict: string): Verdict => {
+                const normalized = verdict?.toLowerCase() || 'safe';
+                if (normalized === 'malicious') return 'malicious';
+                if (normalized === 'suspicious') return 'suspicious';
+                return 'safe';
+              };
+
+
+              // Helper function to remove undefined values
+              const cleanUndefined = (obj: any): any => {
+                if (obj === null || obj === undefined) return null;
+                if (typeof obj !== 'object') return obj;
+                if (Array.isArray(obj)) {
+                  return obj.map(item => cleanUndefined(item));
+                }
+
+                const cleaned: any = {};
+                for (const key in obj) {
+                  const value = obj[key];
+                  if (value !== undefined) {
+                    cleaned[key] = cleanUndefined(value);
+                  }
+                }
+                return cleaned;
+              };
 
   const handleAnalyze = async () => {
     if (!selectedFile) return
@@ -226,10 +259,75 @@ const FileScan: React.FC = () => {
             // Check if complete
             if (analysis.status === 'completed') {
               console.log(`[${id}] Analysis completed, fetching results...`);
-              
+
+              // Fetch the results
               const resultsResponse = await axios.get(`http://localhost:5000/api/results/${id}`)
-              setAnalysisResults(resultsResponse.data)
-              console.log("RESULTTTTT",analysisResults);
+              const resultsData = resultsResponse.data;
+
+              // Set the results first
+              setAnalysisResults(resultsData);
+              console.log("Analysis Results:", resultsData);
+
+
+              // NOW save to Firebase after results are set
+              if (user && selectedFile) {
+                try {
+                  // Extract data from the results structure
+                  const analysisResult = resultsData.analysis_result || {};
+                  const rawVerdict = analysisResult.verdict || resultsData.verdict || 'safe';
+                  const verdict = mapVerdict(rawVerdict);
+                  const confidence = analysisResult.confidence || 0;
+                  const logs = analysisResult.logs || {};
+                  const explanations = logs.explanations || [];
+                  const statistics = logs.statistics || {};
+
+                  // Prepare scan record
+                  const scanRecord: Omit<ScanRecord, 'id' | 'timestamp' | 'userId'> = {
+                    type: 'file',
+                    target: selectedFile.name,
+                    confidence: confidence,
+                    verdict: verdict,
+                    scanData: {
+                      engines: 1,
+                      detections: verdict === 'malicious' ? 1 : 0,
+                      anomalies: explanations,
+                      explanations: explanations,
+                      statistics: {
+                        total_events: statistics.total_events || 0,
+                        files_created: statistics.files_created || 0,
+                        dns_queries: statistics.dns_queries || 0,
+                        registry_changes: statistics.registry_changes || 0,
+                        executable_detections: statistics.executable_detections || 0
+                      },
+                      fileInfo: {
+                        name: selectedFile.name,
+                        size: selectedFile.size,
+                        hash: analysisResult.fileInfo?.file_hash || '',
+                        type: selectedFile.type || 'unknown'
+                      }
+                    },
+                    analysisFlow: 'dynamic_only',
+                    rawResults: cleanUndefined({
+                      analysisId: analysisResult.analysisId,
+                      duration: analysisResult.duration,
+                      vmName: resultsData.summary?.vm_name ?? null,
+                      logFiles: resultsData.log_files ?? []
+                    })
+                  };
+
+                  // Save to Firebase
+                  await scanHistoryService.saveScan(scanRecord);
+                  console.log('✅ Scan saved to Firebase successfully!');
+                  toast.success('Results saved to history');
+
+                } catch (error) {
+                  console.error('❌ Failed to save scan to Firebase:', error);
+                  toast.warning('Analysis complete but failed to save to history');
+                }
+              } else {
+                console.warn('Cannot save: user or selectedFile is null', { user: !!user, selectedFile: !!selectedFile });
+              }
+
               toast.success('Analysis complete!')
               resolve()
               return
@@ -354,20 +452,7 @@ const FileScan: React.FC = () => {
 
 
 
-
-
-
-
-              <ChatBot analysisResults={analysisResults} isAnalyzing={isAnalyzing}/>
-
-
-
-
-
-
-
-
-
+            <ChatBot analysisResults={analysisResults} isAnalyzing={isAnalyzing} />
 
 
             {/* Tips */}

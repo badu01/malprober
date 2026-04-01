@@ -19,6 +19,7 @@ import Analysis from './pages/Analysis'
 import { AuthProvider } from './contexts/AuthContext'
 import { ScanProvider } from './contexts/ScanContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import ProtectedRoute from './components/Layout/ProtectedRoute'
 
 function App() {
   return (
@@ -28,7 +29,11 @@ function App() {
           <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Layout />}>
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }>
                 <Route index element={<Dashboard />} />
                 <Route path="file-scan" element={<FileScan />} />
                 <Route path="url-scan" element={<UrlScan />} />
@@ -38,7 +43,7 @@ function App() {
               </Route>
             </Routes>
           </Router>
-          <ToastContainer 
+          <ToastContainer
             position="bottom-right"
             theme="dark"
             autoClose={3000}

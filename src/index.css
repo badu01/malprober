@@ -5,9 +5,9 @@
 @theme {
   --font-space-grotesk: "Space Grotesk", sans-serif; 
   --font-funnel-display: "Funnel Display", sans-serif;
-  --color-black-primary: #1f1f1f;
+  --color-black-primary: #101010;
   --color-green-main: #A5F54A;
-  --color-black-secondary: #292929;
+  --color-black-secondary: #1a1a1a;
 }
 
 ::-webkit-scrollbar {

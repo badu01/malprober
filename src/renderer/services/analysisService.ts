@@ -1,3 +1,5 @@
+// src/renderer/services/analysisService.ts
+
 import {
   UploadResponse,
   StartAnalysisResponse,

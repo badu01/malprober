@@ -2,8 +2,8 @@ import { ipcMain, app, BrowserWindow } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import * as require$$0$1 from "fs";
-import require$$0__default from "fs";
+import * as fs from "fs";
+import fs__default from "fs";
 import * as require$$1 from "path";
 import require$$1__default from "path";
 import require$$2 from "os";
@@ -12,7 +12,7 @@ import require$$1$1 from "util";
 import stream, { Readable } from "stream";
 import require$$3$1 from "http";
 import require$$4$1 from "https";
-import require$$0$2 from "url";
+import require$$0$1 from "url";
 import http2 from "http2";
 import require$$4$2 from "assert";
 import require$$1$2 from "tty";
@@ -30,7 +30,7 @@ var hasRequiredMain;
 function requireMain() {
   if (hasRequiredMain) return main.exports;
   hasRequiredMain = 1;
-  const fs = require$$0__default;
+  const fs2 = fs__default;
   const path2 = require$$1__default;
   const os = require$$2;
   const crypto = require$$3;
@@ -172,7 +172,7 @@ function requireMain() {
     if (options && options.path && options.path.length > 0) {
       if (Array.isArray(options.path)) {
         for (const filepath of options.path) {
-          if (fs.existsSync(filepath)) {
+          if (fs2.existsSync(filepath)) {
             possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
           }
         }
@@ -182,7 +182,7 @@ function requireMain() {
     } else {
       possibleVaultPath = path2.resolve(process.cwd(), ".env.vault");
     }
-    if (fs.existsSync(possibleVaultPath)) {
+    if (fs2.existsSync(possibleVaultPath)) {
       return possibleVaultPath;
     }
     return null;
@@ -235,7 +235,7 @@ function requireMain() {
     const parsedAll = {};
     for (const path22 of optionPaths) {
       try {
-        const parsed = DotenvModule.parse(fs.readFileSync(path22, { encoding }));
+        const parsed = DotenvModule.parse(fs2.readFileSync(path22, { encoding }));
         DotenvModule.populate(parsedAll, parsed, options);
       } catch (e) {
         if (debug) {
@@ -4545,8 +4545,8 @@ function requireForm_data() {
   var path2 = require$$1__default;
   var http = require$$3$1;
   var https = require$$4$1;
-  var parseUrl = require$$0$2.parse;
-  var fs = require$$0__default;
+  var parseUrl = require$$0$1.parse;
+  var fs2 = fs__default;
   var Stream = stream.Stream;
   var crypto = require$$3;
   var mime = requireMimeTypes();
@@ -4613,7 +4613,7 @@ function requireForm_data() {
       if (value.end != void 0 && value.end != Infinity && value.start != void 0) {
         callback(null, value.end + 1 - (value.start ? value.start : 0));
       } else {
-        fs.stat(value.path, function(err, stat) {
+        fs2.stat(value.path, function(err, stat) {
           if (err) {
             callback(err);
             return;
@@ -5093,7 +5093,7 @@ const transitionalDefaults = {
   forcedJSONParsing: true,
   clarifyTimeoutError: false
 };
-const URLSearchParams = require$$0$2.URLSearchParams;
+const URLSearchParams = require$$0$1.URLSearchParams;
 const ALPHA = "abcdefghijklmnopqrstuvwxyz";
 const DIGIT = "0123456789";
 const ALPHABET = {
@@ -5632,7 +5632,7 @@ var hasRequiredProxyFromEnv;
 function requireProxyFromEnv() {
   if (hasRequiredProxyFromEnv) return proxyFromEnv$1;
   hasRequiredProxyFromEnv = 1;
-  var parseUrl = require$$0$2.parse;
+  var parseUrl = require$$0$1.parse;
   var DEFAULT_PORTS = {
     ftp: 21,
     gopher: 70,
@@ -6497,7 +6497,7 @@ var hasRequiredFollowRedirects;
 function requireFollowRedirects() {
   if (hasRequiredFollowRedirects) return followRedirects$1.exports;
   hasRequiredFollowRedirects = 1;
-  var url = require$$0$2;
+  var url = require$$0$1;
   var URL2 = url.URL;
   var http = require$$3$1;
   var https = require$$4$1;
@@ -9209,11 +9209,12 @@ const {
   mergeConfig
 } = axios;
 const BACKEND_URL = "http://127.0.0.1:5000";
-ipcMain.handle("analysis:upload-file", async (event, filePath) => {
+const STATIC_API_URL = "https://a1b2-c3d4.ngrok-free.app/analyze";
+ipcMain.handle("analysis:upload-file", async (_event, filePath) => {
   try {
     console.log("Uploading file:", filePath);
     const formData = new FormData$1();
-    const fileBuffer = require$$0$1.readFileSync(filePath);
+    const fileBuffer = fs.readFileSync(filePath);
     const fileName = require$$1.basename(filePath);
     formData.append("file", fileBuffer, {
       filename: fileName,
@@ -9247,7 +9248,45 @@ ipcMain.handle("analysis:upload-file", async (event, filePath) => {
     throw error;
   }
 });
-ipcMain.handle("analysis:start", async (event, filePath) => {
+ipcMain.handle("static_analysis", async (_event, filePath) => {
+  try {
+    console.log("Uploading file for static analysis:", filePath);
+    const formData = new FormData$1();
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileName = require$$1.basename(filePath);
+    formData.append("file", fileBuffer, {
+      filename: fileName,
+      contentType: "application/octet-stream"
+    });
+    const response = await axios.post(`${STATIC_API_URL}/api/upload`, formData, {
+      headers: {
+        ...formData.getHeaders(),
+        "Content-Type": "multipart/form-data"
+      },
+      timeout: 3e4
+      // 30 seconds timeout
+    });
+    console.log("Upload response:", response.data);
+    return {
+      success: response.data.success,
+      message: response.data.message,
+      fileInfo: {
+        original_name: response.data.fileInfo.original_name,
+        file_path: response.data.fileInfo.file_path,
+        file_hash: response.data.fileInfo.file_hash,
+        file_size: response.data.fileInfo.file_size,
+        file_extension: response.data.fileInfo.file_extension
+      }
+    };
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error || error.message);
+    }
+    throw error;
+  }
+});
+ipcMain.handle("analysis:start", async (_event, filePath) => {
   try {
     console.log("Starting analysis for file:", filePath);
     const response = await axios.post(`${BACKEND_URL}/api/analyze`, {
@@ -9265,7 +9304,7 @@ ipcMain.handle("analysis:start", async (event, filePath) => {
     throw error;
   }
 });
-ipcMain.handle("analysis:status", async (event, analysisId) => {
+ipcMain.handle("analysis:status", async (_event, analysisId) => {
   try {
     const response = await axios.get(`${BACKEND_URL}/api/status/${analysisId}`, {
       timeout: 5e3
@@ -9279,7 +9318,7 @@ ipcMain.handle("analysis:status", async (event, analysisId) => {
     throw error;
   }
 });
-ipcMain.handle("analysis:results", async (event, analysisId) => {
+ipcMain.handle("analysis:results", async (_event, analysisId) => {
   try {
     const response = await axios.get(`${BACKEND_URL}/api/results/${analysisId}`, {
       timeout: 1e4
@@ -9340,7 +9379,20 @@ ipcMain.handle("scan-url", async (__dirname, url) => {
         }
       }
     );
-    return response.data;
+    const resultAPI = response.data.api;
+    let scanResult;
+    let isCompleted = false;
+    while (!isCompleted) {
+      try {
+        const result = await axios.get(resultAPI);
+        scanResult = result.data;
+        isCompleted = true;
+      } catch (error) {
+        console.log("Scan not ready, retrying...");
+        await new Promise((resolve) => setTimeout(resolve, 3e3));
+      }
+    }
+    return scanResult;
   } catch (error) {
     console.error("Error scanning URL:", error);
     throw error;
